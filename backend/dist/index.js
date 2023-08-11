@@ -49,8 +49,9 @@ app.post('/register', (req, res) => {
     fs.readFile("./subscription.json")
         .then((value) => {
         const jsonValue = JSON.parse(value.toString());
-        const data = Array.isArray(jsonValue) ? jsonValue : [jsonValue];
-        return data;
+        const hashed = jsonValue.map((entry) => JSON.stringify(entry));
+        const uniqueSet = new Set(hashed);
+        return uniqueSet.values();
     })
         .then((subscriptions) => {
         fs.writeFile("./subscription.json", JSON.stringify([data, ...subscriptions]))
