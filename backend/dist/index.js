@@ -22,6 +22,15 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -31,56 +40,72 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const fs = __importStar(require("fs/promises"));
 const webpush = __importStar(require("web-push"));
 const cors = require('cors');
-fs.readFile("./keys.json")
-    .then((value) => {
-    const data = JSON.parse(value.toString());
-    webpush.setVapidDetails(data.subject, data.publicKey, data.privateKey);
-})
-    .catch((err) => {
-    console.log(err);
-});
+function initialize() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const value = yield fs.readFile("./keys.json");
+            const data = JSON.parse(value.toString());
+            webpush.setVapidDetails(data.subject, data.publicKey, data.privateKey);
+        }
+        catch (err) {
+            console.error(err);
+        }
+    });
+}
+initialize();
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const port = 8000;
 app.use(cors());
 app.use(express_1.default.json());
-app.post('/register', (req, res) => {
+app.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const data = req.body;
-    fs.readFile("./subscription.json")
-        .then((value) => {
-        const jsonValue = JSON.parse(value.toString());
-        const hashed = jsonValue.map((entry) => JSON.stringify(entry));
-        const uniqueSet = new Set(hashed);
-        return uniqueSet.values();
-    })
-        .then((subscriptions) => {
-        fs.writeFile("./subscription.json", JSON.stringify([data, ...subscriptions]))
-            .then(() => res.json({ msg: "Subscribed" }))
-            .catch((err) => console.error(err));
-    });
-    webpush.sendNotification(data, JSON.stringify({
-        title: "You are now subscribed to Hale's scam telegram group",
-        msg: "Bullshit"
-    }));
-});
-app.post('/notification', (req, res) => {
+    try {
+        const value = yield fs.readFile("./subscription.json");
+        const subscriptions = JSON.parse(value.toString());
+        // Check for uniqueness
+        const hashed = subscriptions.map((entry) => JSON.stringify(entry));
+        if (hashed.includes(JSON.stringify(data))) {
+            return res.json({ msg: "Already subscribed" });
+        }
+        yield fs.writeFile("./subscription.json", JSON.stringify([data, ...subscriptions]));
+        res.json({ msg: "Subscribed" });
+        // Notification after saving
+        webpush.sendNotification(data, JSON.stringify({
+            title: "You are now subscribed to Hale's scam telegram group",
+            msg: "Bullshit"
+        }));
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ msg: "Error occurred" });
+    }
+}));
+app.post('/notification', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const data = req.body;
-    fs.readFile("./subscription.json")
-        .then((value) => {
+    try {
+        const value = yield fs.readFile("./subscription.json");
         const subscriptions = JSON.parse(value.toString());
         const payload = {
             title: data.title, msg: data.content
         };
-        Promise.allSettled(subscriptions.map((subscription) => {
+        const results = yield Promise.allSettled(subscriptions.map((subscription) => {
             return webpush.sendNotification(subscription, JSON.stringify(payload));
-        }))
-            .then(() => res.json({ msg: "Success" }))
-            .catch((err) => {
-            console.error(err);
-            res.json({ msg: "Fail to send", err: err });
-        });
-    });
-});
+        }));
+        const failedNotifications = results.filter(result => result.status === 'rejected');
+        if (failedNotifications.length > 0) {
+            console.error('Failed to send some notifications', failedNotifications);
+            res.json({ msg: "Fail to send some notifications" });
+        }
+        else {
+            res.json({ msg: "Success" });
+        }
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ msg: "Error occurred" });
+    }
+}));
 app.listen(port, "0.0.0.0", () => {
     console.log(`⚡️[server]: Server is running at http://0.0.0.0:${port}`);
 });
