@@ -15,7 +15,9 @@ const firebaseConfig = {
 
 
 function sendTokenToServer(token) {
-  axios.post('http://127.0.0.1:8000/register_token/', { token: token })
+  axios.post('http://127.0.0.1:8000/register_token/', { 
+    token: token, username : "admin"
+  })
     .then(response => {
       console.log("Token sent to server:", response.data);
     })
